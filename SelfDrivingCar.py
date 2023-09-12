@@ -57,7 +57,7 @@ class DQNAgent(object):
         self.epsilon = 1.0 # exploration rate
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.995
-        self.model = create_mlp(state_size,action_size)
+        self.model = create_mlp(state_size,action_size,1,128)
     
     def update_replay_memory(self, state, action, reward, next_state, done):
         self.memory.store(state, action, reward, next_state, done)
@@ -107,10 +107,12 @@ class DQNAgent(object):
             self.epsilon *= self.epsilon_decay
     
     def load(self,name):
-        self.model.load_weights(name)
+        #self.model.load_weights(name)
+        self.model = tf.keras.models.load_model(name)
     
     def save(self, name):
-        self.model.save_weights(name)
+        self.model.save(name,save_format='h5')
+    
 #######
 ### Create ENV
 class RealWorldEnv:
@@ -120,8 +122,8 @@ class RealWorldEnv:
         Action: 4 
         - Turn left, right, go forward, stop
     """
-    def __init__(self,f_standard_dist = 10,side_standard_dist =10,min_dist = 3, step_frames = 2):
-        self.action_list = [0,1,2,3]
+    def __init__(self,f_standard_dist = 20,side_standard_dist =15,min_dist = 3, step_frames = 1):
+        self.action_list = [0,1,2]
         self.state_dim = 3
         self.standard_distance = f_standard_dist
         self.side_standard_distance = side_standard_dist
@@ -158,29 +160,30 @@ class RealWorldEnv:
                 return reward, np.asarray(state), self.is_terminal
             if action==0: # move forward
                 self.connNetwork.send_action('F')
-                reward = 0.9
+                reward = 0.2
+                if(f_dist>self.standard_distance):
+                    reward+=0.2
+                else:
+                    reward-=0.3
             elif action==1: # move left
                 self.connNetwork.send_action('L')
                 reward = 0.2
+                if(f_dist<=self.standard_distance and l_dist>=self.side_standard_distance):
+                    reward+=0.2
+                elif(l_dist<self.side_standard_distance):
+                    reward-=0.3
             elif action==2: # move right
                 self.connNetwork.send_action('R')
                 reward = 0.2
+                if(f_dist<=self.standard_distance and r_dist>=self.side_standard_distance):
+                    reward+=0.2
+                elif(r_dist<self.side_standard_distance):
+                    reward-=0.3
             elif action==3: # stop
                 self.connNetwork.send_action('S')
                 reward = 0
             else:
-                raise ValueError('`action` should be between 0 and 3.')
-
-            if f_dist<self.standard_distance:
-                reward -=0.3
-            else:
-                if l_dist >=self.side_standard_distance and r_dist>=self.side_standard_distance:
-                    reward+=0.3
-                    state = (f_dist,l_dist,r_dist)
-                    return reward, np.asarray(state), self.is_terminal  
-            if l_dist<self.side_standard_distance or r_dist<self.side_standard_distance:
-                reward -=0.3
-            
+                raise ValueError('`action` should be between 0 and 3.')            
         state = (f_dist,l_dist,r_dist)
         return reward, np.asarray(state), self.is_terminal  
             
@@ -252,18 +255,23 @@ if __name__=='__main__':
     
     maybe_make_dir(models_folder)
     #maybe_make_dir(rewards_folder)
-    mode = 'train'
-    num_episodes = 2000
+    mode = 'retrain'
+    num_episodes = 500
     env = RealWorldEnv()
     state_size = env.state_dim
     action_size = len(env.action_list)
     agent = DQNAgent(state_size,action_size)
     
     if mode =='test':
+        print('testing')
         #no need to run multiple episodes if epsilon = 0, it's deterministic
         agent.epsilon = 0.01
         # load trained weights
-        agent.load(f'{models_folder}/dqn2.h5')
+        agent.load(f'{models_folder}/dqn3.h5')
+    if mode =='retrain':
+        print('retraining')
+        agent.epsilon = 1
+        agent.load(f'{models_folder}/dqn3.h5')
     # play the game num_episodes times
     for e in range(num_episodes):
         t0 = datetime.now()
@@ -272,10 +280,6 @@ if __name__=='__main__':
         print(f"episode: {e + 1}/{num_episodes}, duration: {dt}")
         if stop: break
         # save the weight when we are done
-    if mode == 'train':
+    if mode == 'train' or mode =='retrain':
         # save the DQN
-        agent.save(f'{models_folder}/dqn.h5')
-        
-        
-        
-    
+        agent.save(f'{models_folder}/dqn3.h5')
