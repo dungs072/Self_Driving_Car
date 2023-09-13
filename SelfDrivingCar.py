@@ -18,7 +18,9 @@ import re
 import os
 import pickle
 
-
+# gpus = tf.config.experimental.list_physical_devices('GPU')
+# print(len(gpus))
+# tf.config.experimental.set_memory_growth(gpus[0], True)
 ### The experience replay memory ###
 class ReplayBuffer:
     def __init__(self, state_dim, act_dim, size):
@@ -49,15 +51,16 @@ class ReplayBuffer:
 #######
 ### Deep q neuron agent
 class DQNAgent(object):
-    def __init__(self, state_size, action_size):
+    def __init__(self, state_size, action_size,typeModel:str):
         self.state_size = state_size
         self.action_size = action_size
         self.memory = ReplayBuffer(state_size,action_size, size = 500)
         self.gamma = 0.95 # discount rate
         self.epsilon = 1.0 # exploration rate
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
-        self.model = create_mlp(state_size,action_size,1,128)
+        self.epsilon_min = 0.1
+        self.epsilon_decay = 0.99988
+        if typeModel not in ('train','retrain'):
+            self.model = create_mlp(state_size,action_size,1,128)
     
     def update_replay_memory(self, state, action, reward, next_state, done):
         self.memory.store(state, action, reward, next_state, done)
@@ -122,7 +125,7 @@ class RealWorldEnv:
         Action: 4 
         - Turn left, right, go forward, stop
     """
-    def __init__(self,f_standard_dist = 20,side_standard_dist =15,min_dist = 3, step_frames = 1):
+    def __init__(self,f_standard_dist = 20,side_standard_dist =15,min_dist = 3, step_frames =0.05):
         self.action_list = [0,1,2]
         self.state_dim = 3
         self.standard_distance = f_standard_dist
@@ -130,6 +133,7 @@ class RealWorldEnv:
         self.min_dist = min_dist
         self.step_frames = step_frames
         self.connNetwork = UnRealConnectionNetwork()
+        self.pre_action = None
 
     def reset(self):
         self.cur_step = 0
@@ -157,34 +161,33 @@ class RealWorldEnv:
                 self.is_terminal = True
                 state = (f_dist,l_dist,r_dist)
                 self.connNetwork.send_action('F_E')
+                self.pre_action = action
                 return reward, np.asarray(state), self.is_terminal
             if action==0: # move forward
                 self.connNetwork.send_action('F')
-                reward = 0.2
-                if(f_dist>self.standard_distance):
-                    reward+=0.2
-                else:
-                    reward-=0.3
+                reward = 0.9
+                
             elif action==1: # move left
                 self.connNetwork.send_action('L')
                 reward = 0.2
-                if(f_dist<=self.standard_distance and l_dist>=self.side_standard_distance):
-                    reward+=0.2
-                elif(l_dist<self.side_standard_distance):
-                    reward-=0.3
+                if self.pre_action==2:
+                    reward=-0.2
             elif action==2: # move right
                 self.connNetwork.send_action('R')
                 reward = 0.2
-                if(f_dist<=self.standard_distance and r_dist>=self.side_standard_distance):
-                    reward+=0.2
-                elif(r_dist<self.side_standard_distance):
-                    reward-=0.3
+                if self.pre_action==1:
+                    reward=-0.2
             elif action==3: # stop
                 self.connNetwork.send_action('S')
                 reward = 0
             else:
-                raise ValueError('`action` should be between 0 and 3.')            
+                raise ValueError('`action` should be between 0 and 3.')
+            if(f_dist<self.standard_distance):
+                reward-=0.8
+            if(l_dist<self.side_standard_distance or r_dist<self.side_standard_distance):
+                reward -=0.1     
         state = (f_dist,l_dist,r_dist)
+        self.pre_action = action
         return reward, np.asarray(state), self.is_terminal  
             
                 
@@ -220,7 +223,7 @@ def play_one_episode(agent:DQNAgent,env:RealWorldEnv,is_train:str, batch_size:in
         
         action = agent.get_action(state)
         reward, next_state, done = env.step(action)
-        if is_train == 'train':
+        if is_train == 'train' or is_train =='retrain':
             agent.update_replay_memory(state,action,reward, next_state, done)
             agent.replay(batch_size)
         state = next_state
@@ -239,6 +242,7 @@ def stop_handler():
     if user_input == 'q':
       print("Stopping...")
       stop = True
+      agent.save(f'{models_folder}/dqn3.h5')
 
 process = Thread(target=stop_handler)
 process.start()
@@ -256,11 +260,11 @@ if __name__=='__main__':
     maybe_make_dir(models_folder)
     #maybe_make_dir(rewards_folder)
     mode = 'retrain'
-    num_episodes = 500
+    num_episodes = 5001
     env = RealWorldEnv()
     state_size = env.state_dim
     action_size = len(env.action_list)
-    agent = DQNAgent(state_size,action_size)
+    agent = DQNAgent(state_size,action_size,mode)
     
     if mode =='test':
         print('testing')
@@ -270,7 +274,7 @@ if __name__=='__main__':
         agent.load(f'{models_folder}/dqn3.h5')
     if mode =='retrain':
         print('retraining')
-        agent.epsilon = 1
+        agent.epsilon = 0.9
         agent.load(f'{models_folder}/dqn3.h5')
     # play the game num_episodes times
     for e in range(num_episodes):
@@ -278,8 +282,14 @@ if __name__=='__main__':
         play_one_episode(agent,env,mode,32)
         dt = datetime.now()-t0
         print(f"episode: {e + 1}/{num_episodes}, duration: {dt}")
+        if e%1000==0 and mode in ('train','retrain'):
+            agent.save(f'{models_folder}/dqn3.h5')
         if stop: break
         # save the weight when we are done
     if mode == 'train' or mode =='retrain':
         # save the DQN
         agent.save(f'{models_folder}/dqn3.h5')
+        
+        
+        
+    
