@@ -54,13 +54,13 @@ class DQNAgent(object):
     def __init__(self, state_size, action_size,typeModel:str):
         self.state_size = state_size
         self.action_size = action_size
-        self.memory = ReplayBuffer(state_size,action_size, size = 500)
+        self.memory = ReplayBuffer(state_size,action_size, size = 100000)
         self.gamma = 0.95 # discount rate
         self.epsilon = 1.0 # exploration rate
         self.epsilon_min = 0.1
         self.epsilon_decay = 0.99988
-        if typeModel not in ('train','retrain'):
-            self.model = create_mlp(state_size,action_size,1,128)
+        if typeModel in ('train'):
+            self.model = create_mlp(state_size,action_size,1,64)
     
     def update_replay_memory(self, state, action, reward, next_state, done):
         self.memory.store(state, action, reward, next_state, done)
@@ -125,7 +125,7 @@ class RealWorldEnv:
         Action: 4 
         - Turn left, right, go forward, stop
     """
-    def __init__(self,f_standard_dist = 20,side_standard_dist =15,min_dist = 3, step_frames =0.05):
+    def __init__(self,f_standard_dist = 20,side_standard_dist =15,min_dist = 5, step_frames =0.05):
         self.action_list = [0,1,2]
         self.state_dim = 3
         self.standard_distance = f_standard_dist
@@ -155,38 +155,49 @@ class RealWorldEnv:
             dt = (datetime.now()-t0).total_seconds()
             # print(dt)
             # print(action)
-            (f_dist, l_dist, r_dist) = self.connNetwork.get_data_dist()
-            if(f_dist<=self.min_dist or r_dist<=self.min_dist or l_dist<=self.min_dist): # front car pumped a obstacle
+            #(f_dist, l_dist, r_dist) 
+            distances = self.connNetwork.get_data_dist()
+            min_distance = min(distances)
+            if(min_distance<self.min_dist): # front car pumped a obstacle
                 reward = -1
                 self.is_terminal = True
-                state = (f_dist,l_dist,r_dist)
+                state = distances
                 self.connNetwork.send_action('F_E')
                 self.pre_action = action
                 return reward, np.asarray(state), self.is_terminal
+            else:
+                # Calculate a reward based on the inverse of the minimum distance
+                reward = 1.0 / (min_distance + 1e-6)  # Adding a small epsilon to avoid division by zero
+                # if action == 0:
+                #     reward+=0.1
+                # # Penalize turning actions ("turn_left" or "turn_right") to encourage straight movement
+                # if action == 1 or action == 2:
+                #     reward -= 0.1  
             if action==0: # move forward
                 self.connNetwork.send_action('F')
-                reward = 0.9
+                #reward = 0.9
                 
             elif action==1: # move left
                 self.connNetwork.send_action('L')
-                reward = 0.2
-                if self.pre_action==2:
-                    reward=-0.2
+                # reward = 0.2
+                # if self.pre_action==2:
+                #     reward=-0.2
             elif action==2: # move right
                 self.connNetwork.send_action('R')
-                reward = 0.2
-                if self.pre_action==1:
-                    reward=-0.2
+                # reward = 0.2
+                # if self.pre_action==1:
+                #     reward=-0.2
             elif action==3: # stop
                 self.connNetwork.send_action('S')
                 reward = 0
             else:
                 raise ValueError('`action` should be between 0 and 3.')
-            if(f_dist<self.standard_distance):
-                reward-=0.8
-            if(l_dist<self.side_standard_distance or r_dist<self.side_standard_distance):
-                reward -=0.1     
-        state = (f_dist,l_dist,r_dist)
+            # if(f_dist<self.standard_distance):
+            #     reward-=0.1
+            # if(l_dist<self.side_standard_distance or r_dist<self.side_standard_distance):
+            #     reward -=0.1   
+        
+        state = distances#(f_dist,l_dist,r_dist)
         self.pre_action = action
         return reward, np.asarray(state), self.is_terminal  
             
@@ -259,7 +270,7 @@ if __name__=='__main__':
     
     maybe_make_dir(models_folder)
     #maybe_make_dir(rewards_folder)
-    mode = 'retrain'
+    mode = 'train'
     num_episodes = 5001
     env = RealWorldEnv()
     state_size = env.state_dim
@@ -274,15 +285,15 @@ if __name__=='__main__':
         agent.load(f'{models_folder}/dqn3.h5')
     if mode =='retrain':
         print('retraining')
-        agent.epsilon = 0.9
+        agent.epsilon = 1
         agent.load(f'{models_folder}/dqn3.h5')
     # play the game num_episodes times
     for e in range(num_episodes):
         t0 = datetime.now()
-        play_one_episode(agent,env,mode,32)
+        play_one_episode(agent,env,mode,64)
         dt = datetime.now()-t0
-        print(f"episode: {e + 1}/{num_episodes}, duration: {dt}")
-        if e%1000==0 and mode in ('train','retrain'):
+        print(f"episode: {e + 1}/{num_episodes}, duration: {dt}, epsilon: {agent.epsilon}")
+        if e%5000==0 and mode in ('train','retrain'):
             agent.save(f'{models_folder}/dqn3.h5')
         if stop: break
         # save the weight when we are done
@@ -290,6 +301,3 @@ if __name__=='__main__':
         # save the DQN
         agent.save(f'{models_folder}/dqn3.h5')
         
-        
-        
-    
