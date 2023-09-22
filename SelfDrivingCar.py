@@ -155,9 +155,10 @@ class RealWorldEnv:
             dt = (datetime.now()-t0).total_seconds()
             # print(dt)
             # print(action)
-            #(f_dist, l_dist, r_dist) 
+            
             distances = self.connNetwork.get_data_dist()
-            min_distance = min(distances)
+            (f_dist, l_dist, r_dist) = distances
+            min_distance = min(f_dist,l_dist,r_dist)
             if(min_distance<self.min_dist): # front car pumped a obstacle
                 reward = -1
                 self.is_terminal = True
@@ -165,33 +166,38 @@ class RealWorldEnv:
                 self.connNetwork.send_action('F_E')
                 self.pre_action = action
                 return reward, np.asarray(state), self.is_terminal
-            else:
-                # Calculate a reward based on the inverse of the minimum distance
-                reward = 1.0 / (min_distance + 1e-6)  # Adding a small epsilon to avoid division by zero
-                # if action == 0:
-                #     reward+=0.1
-                # # Penalize turning actions ("turn_left" or "turn_right") to encourage straight movement
-                # if action == 1 or action == 2:
-                #     reward -= 0.1  
             if action==0: # move forward
                 self.connNetwork.send_action('F')
-                #reward = 0.9
+                reward = 0.9
                 
             elif action==1: # move left
                 self.connNetwork.send_action('L')
-                # reward = 0.2
-                # if self.pre_action==2:
-                #     reward=-0.2
+                reward = 0.2
+                if self.pre_action==2:
+                    reward=-0.2
             elif action==2: # move right
                 self.connNetwork.send_action('R')
-                # reward = 0.2
-                # if self.pre_action==1:
-                #     reward=-0.2
+                reward = 0.2
+                if self.pre_action==1:
+                    reward=-0.2
             elif action==3: # stop
                 self.connNetwork.send_action('S')
                 reward = 0
             else:
                 raise ValueError('`action` should be between 0 and 3.')
+            if f_dist<self.standard_distance:
+                if action == 0:
+                    reward -=0.9
+                if action == 1 and l_dist > self.standard_distance:
+                    reward += 0.3
+                if action == 2 and r_dist > self.standard_distance:
+                    reward += 0.3
+            if l_dist < self.standard_distance:
+                if action == 1:
+                    reward -=0.3
+            if r_dist < self.standard_distance:
+                if action == 2:
+                    reward-=0.3           
             # if(f_dist<self.standard_distance):
             #     reward-=0.1
             # if(l_dist<self.side_standard_distance or r_dist<self.side_standard_distance):
@@ -300,4 +306,8 @@ if __name__=='__main__':
     if mode == 'train' or mode =='retrain':
         # save the DQN
         agent.save(f'{models_folder}/dqn3.h5')
+        
+        
+        
+    
         
