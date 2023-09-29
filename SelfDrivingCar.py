@@ -58,7 +58,7 @@ class DQNAgent(object):
         self.gamma = 0.95 # discount rate
         self.epsilon = 1.0 # exploration rate
         self.epsilon_min = 0.1
-        self.epsilon_decay = 0.99988
+        self.epsilon_decay =  0.99988
         if typeModel in ('train'):
             self.model = create_mlp(state_size,action_size,1,64)
     
@@ -125,7 +125,7 @@ class RealWorldEnv:
         Action: 4 
         - Turn left, right, go forward, stop
     """
-    def __init__(self,f_standard_dist = 20,side_standard_dist =15,min_dist = 5, step_frames =0.05):
+    def __init__(self,f_standard_dist = 20,side_standard_dist =12,min_dist = 5, step_frames =0.05):
         self.action_list = [0,1,2]
         self.state_dim = 3
         self.standard_distance = f_standard_dist
@@ -188,14 +188,17 @@ class RealWorldEnv:
             if f_dist<self.standard_distance:
                 if action == 0:
                     reward -=0.9
-                if action == 1 and l_dist > self.standard_distance:
+                if action == 1 and l_dist > self.side_standard_distance:
                     reward += 0.3
-                if action == 2 and r_dist > self.standard_distance:
+                if action == 2 and r_dist > self.side_standard_distance:
                     reward += 0.3
-            if l_dist < self.standard_distance:
+            else:
+                if action ==0 and l_dist<self.side_standard_distance and r_dist<self.side_standard_distance:
+                    reward -=0.9
+            if l_dist < self.side_standard_distance:
                 if action == 1:
                     reward -=0.3
-            if r_dist < self.standard_distance:
+            if r_dist < self.side_standard_distance:
                 if action == 2:
                     reward-=0.3           
             # if(f_dist<self.standard_distance):
@@ -306,8 +309,3 @@ if __name__=='__main__':
     if mode == 'train' or mode =='retrain':
         # save the DQN
         agent.save(f'{models_folder}/dqn3.h5')
-        
-        
-        
-    
-        
