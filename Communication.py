@@ -38,5 +38,5 @@ class UnRealConnectionNetwork:
         weird = "S"
         self.sock.sendall(weird.encode("UTF-8"))
         data = self.sock.recv(1024).decode("UTF-8")
-        f,l,r = [float(x) for x in data.split('+')]
+        f,l,r = [int(x) for x in data.split('+')]
         return (f,l,r)
