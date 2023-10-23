@@ -127,7 +127,7 @@ class RealWorldEnv:
     """
     def __init__(self,f_standard_dist = 10,side_standard_dist =12,min_dist = 5, step_frames =0.02):
         self.action_list = [0,1,2]
-        self.state_dim = 3
+        self.state_dim = 5
         self.standard_distance = f_standard_dist
         self.side_standard_distance = side_standard_dist
         self.min_dist = min_dist
@@ -157,8 +157,8 @@ class RealWorldEnv:
             # print(action)
             
             distances = self.connNetwork.get_data_dist()
-            (f_dist, l_dist, r_dist) = distances
-            min_distance = min(f_dist,l_dist,r_dist)
+            (f_dist, l_dist, r_dist,ml_dist,mr_dist) = distances
+            min_distance = min(distances)
             if(min_distance<self.min_dist): # front car pumped a obstacle
                 reward = -100
                 self.is_terminal = True
@@ -173,21 +173,20 @@ class RealWorldEnv:
                 self.connNetwork.send_action('L')
                 reward = -0.1
                 if self.pre_action==2:
-                    reward-=0.8
+                    reward-=10
             elif action==2: # move right
                 self.connNetwork.send_action('R')
                 reward = -0.1
                 if self.pre_action==1:
-                    reward-=0.8
+                    reward-=10
             elif action==3: # stop
                 self.connNetwork.send_action('S')
                 reward = 0
             else:
                 raise ValueError('`action` should be between 0 and 3.')
-            if f_dist>self.standard_distance:
-                reward+=0.2
-            else:
-                reward-=0.2
+            if min_distance>self.standard_distance:
+                reward+=(f_dist+(abs(l_dist-r_dist)+abs(ml_dist-mr_dist)))/10
+            
         state = distances#(f_dist,l_dist,r_dist)
         self.pre_action = action
         return reward, np.asarray(state), self.is_terminal  
@@ -292,3 +291,6 @@ if __name__=='__main__':
         # save the DQN
         agent.save(f'{models_folder}/dqn3.h5')
         
+        
+        
+    
