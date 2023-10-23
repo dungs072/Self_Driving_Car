@@ -54,13 +54,13 @@ class DQNAgent(object):
     def __init__(self, state_size, action_size,typeModel:str):
         self.state_size = state_size
         self.action_size = action_size
-        self.memory = ReplayBuffer(state_size,action_size, size = 100000)
+        self.memory = ReplayBuffer(state_size,action_size, size = 1000000)
         self.gamma = 0.95 # discount rate
         self.epsilon = 1.0 # exploration rate
-        self.epsilon_min = 0.1
-        self.epsilon_decay =  0.99988
+        self.epsilon_min = 0.0001
+        self.epsilon_decay =  0.99999
         if typeModel in ('train'):
-            self.model = create_mlp(state_size,action_size,1,64)
+            self.model = create_mlp(state_size,action_size,3,32)
     
     def update_replay_memory(self, state, action, reward, next_state, done):
         self.memory.store(state, action, reward, next_state, done)
@@ -136,7 +136,7 @@ class RealWorldEnv:
         self.pre_action = None
 
     def reset(self):
-        self.cur_step = 0
+        self.pre_action=None
     def get_current_state(self):
         return self.connNetwork.get_data_dist()
         
@@ -155,12 +155,13 @@ class RealWorldEnv:
             dt = (datetime.now()-t0).total_seconds()
             # print(dt)
             # print(action)
-            
+            Rm,Rp,Rex = 0,0,0
             distances = self.connNetwork.get_data_dist()
             (f_dist, l_dist, r_dist,ml_dist,mr_dist) = distances
             min_distance = min(distances)
+            max_distance = max(distances)
             if(min_distance<self.min_dist): # front car pumped a obstacle
-                reward = -100
+                reward = -1000
                 self.is_terminal = True
                 state = distances
                 self.connNetwork.send_action('F_E')
@@ -168,25 +169,38 @@ class RealWorldEnv:
                 return reward, np.asarray(state), self.is_terminal
             if action==0: # move forward
                 self.connNetwork.send_action('F')
-                reward = 0.2
+                Rm = 0.5
             elif action==1: # move left
                 self.connNetwork.send_action('L')
-                reward = -0.1
+                Rm = -0.1
                 if self.pre_action==2:
-                    reward-=10
+                    Rp-=1
             elif action==2: # move right
                 self.connNetwork.send_action('R')
-                reward = -0.1
+                Rm = -0.1
                 if self.pre_action==1:
-                    reward-=10
+                    Rp-=1
             elif action==3: # stop
                 self.connNetwork.send_action('S')
-                reward = 0
+                Rm = 0
             else:
                 raise ValueError('`action` should be between 0 and 3.')
-            if min_distance>self.standard_distance:
-                reward+=(f_dist+(abs(l_dist-r_dist)+abs(ml_dist-mr_dist)))/10
-            
+            if(min_distance==r_dist or min_distance==mr_dist):
+                if max_distance == l_dist or max_distance==ml_dist:
+                    if action==1:
+                        Rex = 0.7
+            if(min_distance==l_dist or min_distance==ml_dist):
+                if max_distance == r_dist or max_distance==mr_dist:
+                    if action==2:
+                        Rex = 0.7
+            if(min_distance==f_dist):
+                if max_distance == l_dist or max_distance==ml_dist:
+                    if action==1:
+                        Rex = 0.7
+                if max_distance == r_dist or max_distance==mr_dist:
+                    if action==2:
+                        Rex = 0.7
+        reward = Rm+Rp+Rex            
         state = distances#(f_dist,l_dist,r_dist)
         self.pre_action = action
         return reward, np.asarray(state), self.is_terminal  
@@ -251,15 +265,8 @@ process.start()
 if __name__=='__main__':
     #config
     models_folder = 'self_driving_car_models'
-    #rewards_folder = 'self_driving_car_rewards'
-    
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('-m','--mode',type = str, required = True,
-    #                     help = 'either "train" or "test"')
-    # args = parser.parse_args()
     
     maybe_make_dir(models_folder)
-    #maybe_make_dir(rewards_folder)
     mode = 'train'
     num_episodes = 5001
     env = RealWorldEnv()
@@ -280,7 +287,8 @@ if __name__=='__main__':
     # play the game num_episodes times
     for e in range(num_episodes):
         t0 = datetime.now()
-        play_one_episode(agent,env,mode,64)
+        play_one_episode(agent,env,mode,4000)
+        env.reset()
         dt = datetime.now()-t0
         print(f"episode: {e + 1}/{num_episodes}, duration: {dt}, epsilon: {agent.epsilon}")
         if e%5000==0 and mode in ('train','retrain'):
@@ -291,6 +299,9 @@ if __name__=='__main__':
         # save the DQN
         agent.save(f'{models_folder}/dqn3.h5')
         
+        
+        
+    
         
         
     
