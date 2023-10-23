@@ -54,11 +54,11 @@ class DQNAgent(object):
     def __init__(self, state_size, action_size,typeModel:str):
         self.state_size = state_size
         self.action_size = action_size
-        self.memory = ReplayBuffer(state_size,action_size, size = 1000000)
+        self.memory = ReplayBuffer(state_size,action_size, size = 100000)
         self.gamma = 0.95 # discount rate
         self.epsilon = 1.0 # exploration rate
         self.epsilon_min = 0.0001
-        self.epsilon_decay =  0.99999
+        self.epsilon_decay =  0.99998
         if typeModel in ('train'):
             self.model = create_mlp(state_size,action_size,3,32)
     
@@ -299,6 +299,9 @@ if __name__=='__main__':
         # save the DQN
         agent.save(f'{models_folder}/dqn3.h5')
         
+        
+        
+    
         
         
     
