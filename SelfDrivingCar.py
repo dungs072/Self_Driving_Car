@@ -125,7 +125,7 @@ class RealWorldEnv:
         Action: 4 
         - Turn left, right, go forward, stop
     """
-    def __init__(self,f_standard_dist = 20,side_standard_dist =12,min_dist = 5, step_frames =0.05):
+    def __init__(self,f_standard_dist = 10,side_standard_dist =12,min_dist = 5, step_frames =0.02):
         self.action_list = [0,1,2]
         self.state_dim = 3
         self.standard_distance = f_standard_dist
@@ -160,7 +160,7 @@ class RealWorldEnv:
             (f_dist, l_dist, r_dist) = distances
             min_distance = min(f_dist,l_dist,r_dist)
             if(min_distance<self.min_dist): # front car pumped a obstacle
-                reward = -1
+                reward = -100
                 self.is_terminal = True
                 state = distances
                 self.connNetwork.send_action('F_E')
@@ -168,44 +168,26 @@ class RealWorldEnv:
                 return reward, np.asarray(state), self.is_terminal
             if action==0: # move forward
                 self.connNetwork.send_action('F')
-                reward = 0.9
-                
+                reward = 0.2
             elif action==1: # move left
                 self.connNetwork.send_action('L')
-                reward = 0.2
+                reward = -0.1
                 if self.pre_action==2:
-                    reward=-0.2
+                    reward-=0.8
             elif action==2: # move right
                 self.connNetwork.send_action('R')
-                reward = 0.2
+                reward = -0.1
                 if self.pre_action==1:
-                    reward=-0.2
+                    reward-=0.8
             elif action==3: # stop
                 self.connNetwork.send_action('S')
                 reward = 0
             else:
                 raise ValueError('`action` should be between 0 and 3.')
-            if f_dist<self.standard_distance:
-                if action == 0:
-                    reward -=0.9
-                if action == 1 and l_dist > self.side_standard_distance:
-                    reward += 0.3
-                if action == 2 and r_dist > self.side_standard_distance:
-                    reward += 0.3
+            if f_dist>self.standard_distance:
+                reward+=0.2
             else:
-                if action ==0 and l_dist<self.side_standard_distance and r_dist<self.side_standard_distance:
-                    reward -=0.9
-            if l_dist < self.side_standard_distance:
-                if action == 1:
-                    reward -=0.3
-            if r_dist < self.side_standard_distance:
-                if action == 2:
-                    reward-=0.3           
-            # if(f_dist<self.standard_distance):
-            #     reward-=0.1
-            # if(l_dist<self.side_standard_distance or r_dist<self.side_standard_distance):
-            #     reward -=0.1   
-        
+                reward-=0.2
         state = distances#(f_dist,l_dist,r_dist)
         self.pre_action = action
         return reward, np.asarray(state), self.is_terminal  
@@ -309,3 +291,4 @@ if __name__=='__main__':
     if mode == 'train' or mode =='retrain':
         # save the DQN
         agent.save(f'{models_folder}/dqn3.h5')
+        
