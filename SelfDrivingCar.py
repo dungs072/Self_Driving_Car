@@ -58,9 +58,9 @@ class DQNAgent(object):
         self.gamma = 0.95 # discount rate
         self.epsilon = 1.0 # exploration rate
         self.epsilon_min = 0.0001
-        self.epsilon_decay =  0.99998
+        self.epsilon_decay =  0.9998
         if typeModel in ('train'):
-            self.model = create_mlp(state_size,action_size,3,32)
+            self.model = create_mlp(state_size,action_size,1,32)
     
     def update_replay_memory(self, state, action, reward, next_state, done):
         self.memory.store(state, action, reward, next_state, done)
@@ -134,9 +134,11 @@ class RealWorldEnv:
         self.step_frames = step_frames
         self.connNetwork = UnRealConnectionNetwork()
         self.pre_action = None
+        self.pre_sensor_values = self.connNetwork.get_data_dist()
 
     def reset(self):
         self.pre_action=None
+        self.pre_sensor_values = self.connNetwork.get_data_dist()
     def get_current_state(self):
         return self.connNetwork.get_data_dist()
         
@@ -155,11 +157,8 @@ class RealWorldEnv:
             dt = (datetime.now()-t0).total_seconds()
             # print(dt)
             # print(action)
-            Rm,Rp,Rex = 0,0,0
             distances = self.connNetwork.get_data_dist()
-            (f_dist, l_dist, r_dist,ml_dist,mr_dist) = distances
             min_distance = min(distances)
-            max_distance = max(distances)
             if(min_distance<self.min_dist): # front car pumped a obstacle
                 reward = -1000
                 self.is_terminal = True
@@ -169,40 +168,30 @@ class RealWorldEnv:
                 return reward, np.asarray(state), self.is_terminal
             if action==0: # move forward
                 self.connNetwork.send_action('F')
-                Rm = 0.5
+                reward =0.2
             elif action==1: # move left
                 self.connNetwork.send_action('L')
-                Rm = -0.1
+                reward = -0.1
                 if self.pre_action==2:
-                    Rp-=1
+                    reward-=0.8
             elif action==2: # move right
                 self.connNetwork.send_action('R')
-                Rm = -0.1
+                reward = -0.1
                 if self.pre_action==1:
-                    Rp-=1
+                    reward-=0.8
             elif action==3: # stop
                 self.connNetwork.send_action('S')
-                Rm = 0
+                reward = 0
             else:
-                raise ValueError('`action` should be between 0 and 3.')
-            if(min_distance==r_dist or min_distance==mr_dist):
-                if max_distance == l_dist or max_distance==ml_dist:
-                    if action==1:
-                        Rex = 0.7
-            if(min_distance==l_dist or min_distance==ml_dist):
-                if max_distance == r_dist or max_distance==mr_dist:
-                    if action==2:
-                        Rex = 0.7
-            if(min_distance==f_dist):
-                if max_distance == l_dist or max_distance==ml_dist:
-                    if action==1:
-                        Rex = 0.7
-                if max_distance == r_dist or max_distance==mr_dist:
-                    if action==2:
-                        Rex = 0.7
-        reward = Rm+Rp+Rex            
+                raise ValueError('`action` should be between 0 and 3.')     
+            
+            if(sum(distances-self.pre_sensor_values)>0):
+                reward+=0.2
+            else:
+                reward-=0.2    
         state = distances#(f_dist,l_dist,r_dist)
         self.pre_action = action
+        self.pre_sensor_values = distances
         return reward, np.asarray(state), self.is_terminal  
             
                 
@@ -298,10 +287,6 @@ if __name__=='__main__':
     if mode == 'train' or mode =='retrain':
         # save the DQN
         agent.save(f'{models_folder}/dqn3.h5')
-        
-        
-        
-    
         
         
     
