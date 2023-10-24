@@ -185,7 +185,7 @@ class RealWorldEnv:
             else:
                 raise ValueError('`action` should be between 0 and 3.')     
             
-            if(sum(distances-self.pre_sensor_values)>0):
+            if(sum(tuple(x-y for x, y in zip(distances,self.pre_sensor_values)))>0):
                 reward+=0.2
             else:
                 reward-=0.2    
@@ -288,8 +288,6 @@ if __name__=='__main__':
         # save the DQN
         agent.save(f'{models_folder}/dqn3.h5')
         
-        
-    
         
         
     
